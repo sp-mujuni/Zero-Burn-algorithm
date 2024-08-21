@@ -110,31 +110,22 @@ if __name__ == "__main__":
     bps = BurnoutPreventionSystem()
 
     # Add developers
-    alice = Developer("Alice", "Frontend Developer")
-    bob = Developer("Bob", "Backend Developer")
-    bps.add_developer(alice)
-    bps.add_developer(bob)
+    dev_name = input("Enter Developer Name: ")
+    dev_role = input("Enter Developer Role: ")
+    dev = Developer(dev_name, dev_role)
+    bps.add_developer(dev)
 
     # Simulate data for a few months
     for week in range(20):
         for day in range(7):
             date = datetime.date.today() - datetime.timedelta(weeks=week, days=day)
-            alice_hours = np.random.randint(6, 11)
-            bob_hours = np.random.randint(5, 10)
-            alice_burnout = min(1, max(0, np.random.normal(0.5, 0.2)))
-            bob_burnout = min(1, max(0, np.random.normal(0.4, 0.2)))
+            dev_hours = np.random.randint(6, 11)
+            dev_burnout = min(1, max(0, np.random.normal(0.5, 0.2)))
+            bps.log_work(dev, date, dev_hours, dev_burnout)
 
-            bps.log_work(alice, date, alice_hours, alice_burnout)
-            bps.log_work(bob, date, bob_hours, bob_burnout)
-
-        alice_tasks = np.random.randint(5, 15)
-        bob_tasks = np.random.randint(3, 12)
-
-        for _ in range(alice_tasks):
-            alice.tasks.append({"name": "Task", "deadline": date + datetime.timedelta(days=7)})
-
-        for _ in range(bob_tasks):
-            bob.tasks.append({"name": "Task", "deadline": date + datetime.timedelta(days=7)})
+    dev_tasks = np.random.randint(5, 15)
+    for _ in range(dev_tasks):
+            dev.tasks.append({"name": "Task", "deadline": date + datetime.timedelta(days=7)})
 
     # Monitor burnout and provide recommendations
     bps.monitor_burnout()

@@ -32,26 +32,23 @@ class BurnoutPreventionSystem:
     def add_developer(self, developer: Developer):
         self.developers.append(developer)
 
-    def log_work(self, developer: Developer, date: datetime.date, hours: float, burnout_rate: float):
-        developer.log_work(date, hours, burnout_rate)
+    def log_work(self, developer: Developer, work_date: date, hours: float, burnout_rate: float):
+        developer.log_work(work_date, hours, burnout_rate)
 
-    def calculate_weekly_stats(self, developer: Developer, date: datetime.date):
-        week_start = date - date.timedelta(days=date.weekday())
-        week_end = week_start + date.timedelta(days=6)
-        weekly_hours = sum(hours for day, hours in developer.hours_worked.items() 
-                           if week_start <= day <= week_end)
-        weekly_burnout = np.mean([rate for day, rate in developer.burnout_rate.items() 
-                                  if week_start <= day <= week_end])
-        weekly_tasks = len([task for task in developer.tasks 
-                            if week_start <= task['deadline'] <= week_end])
+    def calculate_weekly_stats(self, developer: Developer, work_date: date):
+        week_start = work_date - timedelta(days=work_date.weekday())
+        week_end = week_start + timedelta(days=6)
+        weekly_hours = sum(hours for day, hours in developer.hours_worked.items() if week_start <= day <= week_end)
+        weekly_burnout = np.mean([rate for day, rate in developer.burnout_rate.items() if week_start <= day <= week_end])
+        weekly_tasks = len([task for task in developer.tasks if week_start <= task['deadline'] <= week_end])
         return weekly_hours, weekly_burnout, weekly_tasks
 
     def prepare_data(self, developer: Developer):
         X, y_hours, y_workload = [], [], []
         dates = sorted(developer.hours_worked.keys())
-        for i, date in enumerate(dates):
+        for i, work_date in enumerate(dates):
             if i >= 4:  # Use last 4 weeks of data to predict
-                weekly_hours, weekly_burnout, weekly_tasks = self.calculate_weekly_stats(developer, date)
+                weekly_hours, weekly_burnout, weekly_tasks = self.calculate_weekly_stats(developer, work_date)
                 features = [
                     np.mean([self.calculate_weekly_stats(developer, dates[j])[0] for j in range(i-4, i)]),
                     np.mean([self.calculate_weekly_stats(developer, dates[j])[1] for j in range(i-4, i)]),
@@ -84,26 +81,26 @@ class BurnoutPreventionSystem:
     def get_recommendations(self, developer: Developer):
         self.train_models(developer)
         optimal_hours, optimal_workload = self.predict_optimal_conditions(developer)
-        
+
         recent_weekly_hours, recent_burnout, recent_tasks = self.calculate_weekly_stats(developer, max(developer.hours_worked.keys()))
-        
+
         recommendations = []
-        
+
         if recent_weekly_hours > optimal_hours:
             recommendations.append(f"Reduce weekly working hours from {recent_weekly_hours:.1f} to approximately {optimal_hours:.1f} hours")
         elif recent_weekly_hours < optimal_hours:
             recommendations.append(f"You can potentially increase your weekly hours from {recent_weekly_hours:.1f} to approximately {optimal_hours:.1f} hours without risking burnout")
-        
+
         if recent_tasks > optimal_workload:
             recommendations.append(f"Reduce your weekly tasks from {recent_tasks} to approximately {optimal_workload:.0f} tasks")
         elif recent_tasks < optimal_workload:
             recommendations.append(f"You can potentially handle more tasks. Consider increasing from {recent_tasks} to approximately {optimal_workload:.0f} tasks per week")
-        
+
         if recent_burnout > 0.7:
             recommendations.append("Your recent burnout rate is high. Consider taking some time off or reducing workload significantly")
         elif recent_burnout > 0.5:
             recommendations.append("Your burnout rate is moderate. Monitor closely and consider implementing stress-reduction techniques")
-        
+
         return recommendations
 
     def monitor_burnout(self):
