@@ -24,7 +24,7 @@ class BurnoutPreventionSystem:
         self.hours_model = LinearRegression()
         self.workload_model = LinearRegression()
         self.scaler = StandardScaler()
-        self.data = pd.read_csv(data_file)
+        self.data = pd.read_csv('developer_data.csv')
 
     def prepare_data(self):
         X = self.data[['weekly_hours', 'weekly_burnout', 'weekly_tasks']]
