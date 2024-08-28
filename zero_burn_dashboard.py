@@ -9,6 +9,9 @@ from sklearn.metrics import mean_squared_error
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
+import io
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 
 class Developer:
     def __init__(self, name: str, role: str):
@@ -21,42 +24,54 @@ class Developer:
 class BurnoutPreventionSystem:
     def __init__(self, data_file: str):
         self.developers: List[Developer] = []
+        self.burnout_model = LinearRegression()
         self.hours_model = LinearRegression()
         self.workload_model = LinearRegression()
         self.scaler = StandardScaler()
         self.data = pd.read_csv('developer_data.csv')
 
     def prepare_data(self):
-        X = self.data[['weekly_hours', 'weekly_burnout', 'weekly_tasks']]
+        X = self.data[['weekly_hours', 'weekly_tasks']]
+        y_burnout = self.data['burnout_rate']
         y_hours = self.data['next_week_hours']
         y_workload = self.data['next_week_tasks']
-        return X, y_hours, y_workload
+        return X, y_burnout, y_hours, y_workload
 
     def train_models(self):
-        X, y_hours, y_workload = self.prepare_data()
+        X, y_burnout, y_hours, y_workload = self.prepare_data()
         X = self.scaler.fit_transform(X)
 
-        X_train, X_test, y_hours_train, y_hours_test = train_test_split(X, y_hours, test_size=0.2, random_state=42)
-        self.hours_model.fit(X_train, y_hours_train)
+        X_train, X_test, y_burnout_train, y_burnout_test = train_test_split(X, y_burnout, test_size=0.2, random_state=42)
+        self.burnout_model.fit(X_train, y_burnout_train)
+        burnout_pred = self.burnout_model.predict(X_test)
+        burnout_mse = mean_squared_error(y_burnout_test, burnout_pred)
+
+        self.hours_model.fit(X_train, y_hours.iloc[y_burnout_train.index])
         hours_pred = self.hours_model.predict(X_test)
-        hours_mse = mean_squared_error(y_hours_test, hours_pred)
+        hours_mse = mean_squared_error(y_hours.iloc[y_burnout_test.index], hours_pred)
 
-        X_train, X_test, y_workload_train, y_workload_test = train_test_split(X, y_workload, test_size=0.2, random_state=42)
-        self.workload_model.fit(X_train, y_workload_train)
+        self.workload_model.fit(X_train, y_workload.iloc[y_burnout_train.index])
         workload_pred = self.workload_model.predict(X_test)
-        workload_mse = mean_squared_error(y_workload_test, workload_pred)
+        workload_mse = mean_squared_error(y_workload.iloc[y_burnout_test.index], workload_pred)
 
-        return hours_mse, workload_mse
+        return burnout_mse, hours_mse, workload_mse
 
-    def predict_optimal_conditions(self, weekly_hours: float, weekly_burnout: float, weekly_tasks: int):
-        recent_data = np.array([[weekly_hours, weekly_burnout, weekly_tasks]])
+    def predict_burnout(self, weekly_hours: float, weekly_tasks: int):
+        recent_data = np.array([[weekly_hours, weekly_tasks]])
+        recent_data = self.scaler.transform(recent_data)
+        predicted_burnout = self.burnout_model.predict(recent_data)[0]
+        return max(0, min(1, predicted_burnout))  # Ensure burnout is between 0 and 1
+
+    def predict_optimal_conditions(self, weekly_hours: float, weekly_tasks: int):
+        recent_data = np.array([[weekly_hours, weekly_tasks]])
         recent_data = self.scaler.transform(recent_data)
         optimal_hours = self.hours_model.predict(recent_data)[0]
         optimal_workload = self.workload_model.predict(recent_data)[0]
         return optimal_hours, optimal_workload
 
-    def get_recommendations(self, weekly_hours: float, weekly_burnout: float, weekly_tasks: int):
-        optimal_hours, optimal_workload = self.predict_optimal_conditions(weekly_hours, weekly_burnout, weekly_tasks)
+    def get_recommendations(self, weekly_hours: float, weekly_tasks: int):
+        predicted_burnout = self.predict_burnout(weekly_hours, weekly_tasks)
+        optimal_hours, optimal_workload = self.predict_optimal_conditions(weekly_hours, weekly_tasks)
 
         recommendations = []
 
@@ -70,23 +85,23 @@ class BurnoutPreventionSystem:
         elif weekly_tasks < optimal_workload:
             recommendations.append(f"You can potentially handle more tasks. Consider increasing from {weekly_tasks} to approximately {optimal_workload:.0f} tasks per week")
 
-        if weekly_burnout > 0.7:
-            recommendations.append("Your recent burnout rate is high. Consider taking some time off or reducing workload significantly")
-        elif weekly_burnout > 0.5:
-            recommendations.append("Your burnout rate is moderate. Monitor closely and consider implementing stress-reduction techniques")
+        if predicted_burnout > 0.7:
+            recommendations.append("Your predicted burnout rate is high. Consider taking some time off or reducing workload significantly")
+        elif predicted_burnout > 0.5:
+            recommendations.append("Your predicted burnout rate is moderate. Monitor closely and consider implementing stress-reduction techniques")
 
         return recommendations
 
 def create_dashboard(bps: BurnoutPreventionSystem):
-    st.title("Interactive Burnout Tracker")
+    st.title("Interactive Burnout Predictor")
 
-    global name, role    
     st.sidebar.header("Developer Information")
     name = st.sidebar.text_input("Name")
     role = st.sidebar.text_input("Role")
 
     # Train models and display MSE
-    hours_mse, workload_mse = bps.train_models()
+    burnout_mse, hours_mse, workload_mse = bps.train_models()
+    st.write(f"Burnout Model MSE: {burnout_mse:.2f}")
     st.write(f"Hours Model MSE: {hours_mse:.2f}")
     st.write(f"Workload Model MSE: {workload_mse:.2f}")
     st.write("-------------------------------------------")
@@ -101,51 +116,75 @@ def create_dashboard(bps: BurnoutPreventionSystem):
         st.sidebar.subheader(f"Week {i+1}")
         week_start = st.sidebar.date_input(f"Week {i+1} Start Date", value=datetime.date.today() - datetime.timedelta(weeks=num_weeks-i-1))
         hours = st.sidebar.number_input(f"Hours Worked (Week {i+1})", min_value=0, max_value=168, value=40)
-        burnout = st.sidebar.slider(f"Burnout Rate (Week {i+1})", 0.0, 1.0, 0.5)
-        weeks_data.append({"week_start": week_start, "hours": hours, "burnout": burnout})
-
-    st.sidebar.header("Tasks")
-    num_tasks = st.sidebar.number_input("Number of tasks", min_value=0, max_value=20, value=5)
-
-    tasks = []
-    for i in range(num_tasks):
-        st.sidebar.subheader(f"Task {i+1}")
-        task_name = st.sidebar.text_input(f"Task {i+1} Name", value=f"Task {i+1}")
-        deadline = st.sidebar.date_input(f"Task {i+1} Deadline", value=datetime.date.today() + datetime.timedelta(days=7))
-        estimated_hours = st.sidebar.number_input(f"Task {i+1} Estimated Hours", min_value=1, max_value=168, value=8)
-        tasks.append({"name": task_name, "deadline": deadline, "estimated_hours": estimated_hours})
+        tasks = st.sidebar.number_input(f"Number of Tasks (Week {i+1})", min_value=0, max_value=50, value=5)
+        weeks_data.append({"week_start": week_start, "hours": hours, "tasks": tasks})
 
     if st.sidebar.button("Update Dashboard"):
-        # Create time series plots
+        # Predict burnout rates
         dates = [week["week_start"] for week in weeks_data]
         hours = [week["hours"] for week in weeks_data]
-        burnout = [week["burnout"] for week in weeks_data]
+        tasks = [week["tasks"] for week in weeks_data]
+        burnout = [bps.predict_burnout(h, t) for h, t in zip(hours, tasks)]
 
+        # Create time series plots
         fig_hours = go.Figure()
         fig_hours.add_trace(go.Scatter(x=dates, y=hours, mode='lines+markers', name='Hours Worked'))
         fig_hours.update_layout(title='Hours Worked Over Time', xaxis_title='Week Start Date', yaxis_title='Hours')
         st.plotly_chart(fig_hours)
 
         fig_burnout = go.Figure()
-        fig_burnout.add_trace(go.Scatter(x=dates, y=burnout, mode='lines+markers', name='Burnout Rate'))
-        fig_burnout.update_layout(title='Burnout Rate Over Time', xaxis_title='Week Start Date', yaxis_title='Burnout Rate')
+        fig_burnout.add_trace(go.Scatter(x=dates, y=burnout, mode='lines+markers', name='Predicted Burnout Rate'))
+        fig_burnout.update_layout(title='Predicted Burnout Rate Over Time', xaxis_title='Week Start Date', yaxis_title='Burnout Rate')
         st.plotly_chart(fig_burnout)
 
         # Display task information
-        st.subheader("Current Tasks")
-        task_df = pd.DataFrame(tasks)
+        st.subheader("Tasks Overview")
+        task_df = pd.DataFrame({"Week Start": dates, "Number of Tasks": tasks})
         st.write(task_df)
 
         # Calculate weekly averages for recommendations
         avg_weekly_hours = np.mean(hours)
-        avg_weekly_burnout = np.mean(burnout)
-        avg_weekly_tasks = len([task for task in tasks if task['deadline'] <= max(dates) + datetime.timedelta(days=7)])
+        avg_weekly_tasks = np.mean(tasks)
 
         # Display recommendations
         st.subheader("Recommendations")
-        recommendations = bps.get_recommendations(avg_weekly_hours, avg_weekly_burnout, avg_weekly_tasks)
+        recommendations = bps.get_recommendations(avg_weekly_hours, avg_weekly_tasks)
         for rec in recommendations:
             st.write(f"- {rec}")
+
+        # New code for generating PDF report
+        if st.button("Print Results"):
+            pdf_buffer = io.BytesIO()
+            can = canvas.Canvas(pdf_buffer, pagesize=letter)
+            width, height = letter
+
+            # Add content to the PDF
+            can.setFont("Helvetica-Bold", 16)
+            can.drawString(50, height - 50, f"Burnout Prevention Report for {name}")
+            can.setFont("Helvetica", 12)
+            can.drawString(50, height - 70, f"Role: {role}")
+            can.drawString(50, height - 90, f"Report generated on: {datetime.date.today().strftime('%Y-%m-%d')}")
+
+            y_position = height - 120
+            for i, week in enumerate(weeks_data):
+                can.drawString(50, y_position, f"Week {i+1}: {week['week_start'].strftime('%Y-%m-%d')}")
+                can.drawString(70, y_position - 20, f"Hours Worked: {week['hours']}")
+                can.drawString(70, y_position - 40, f"Tasks Completed: {week['tasks']}")
+                y_position -= 60
+
+            can.drawString(50, y_position, "Recommendations:")
+            for i, rec in enumerate(recommendations):
+                can.drawString(70, y_position - 20 * (i + 1), f"- {rec}")
+
+            can.save()
+            pdf_buffer.seek(0)
+
+            st.download_button(
+                label="Download PDF Report",
+                data=pdf_buffer,
+                file_name=f"burnout_report_{name.replace(' ', '_')}.pdf",
+                mime="application/pdf"
+            )
 
 # Example usage
 if __name__ == "__main__":

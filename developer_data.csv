@@ -1,4 +1,4 @@
-weekly_hours,weekly_burnout,weekly_tasks,next_week_hours,next_week_tasks
+weekly_hours,burnout_rate,weekly_tasks,next_week_hours,next_week_tasks
 40,0.4,4,23,7
 23,0.2,2,6,3
 34,0.1,5,34,12
