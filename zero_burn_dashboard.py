@@ -147,17 +147,6 @@ def create_dashboard(bps: BurnoutPreventionSystem):
         for rec in recommendations:
             st.write(f"- {rec}")
 
-        # # Interactive prediction
-        # st.subheader("Predict Optimal Conditions")
-        # predict_weekly_hours = st.slider("Weekly Hours", 0, 80, int(avg_weekly_hours))
-        # predict_weekly_burnout = st.slider("Weekly Burnout Rate", 0.0, 1.0, float(avg_weekly_burnout))
-        # predict_weekly_tasks = st.slider("Weekly Tasks", 0, 20, int(avg_weekly_tasks))
-
-        # if st.button("Predict"):
-        #     optimal_hours, optimal_workload = bps.predict_optimal_conditions(predict_weekly_hours, predict_weekly_burnout, predict_weekly_tasks)
-        #     st.write(f"Predicted Optimal Hours: {optimal_hours:.2f}")
-        #     st.write(f"Predicted Optimal Workload: {optimal_workload:.2f}")
-
 # Example usage
 if __name__ == "__main__":
     bps = BurnoutPreventionSystem('developer_data.csv')
