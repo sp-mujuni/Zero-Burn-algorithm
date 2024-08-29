@@ -5,7 +5,7 @@ import pandas as pd
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 import streamlit as st
 import plotly.graph_objects as go
 import plotly.express as px
@@ -44,17 +44,20 @@ class BurnoutPreventionSystem:
         X_train, X_test, y_burnout_train, y_burnout_test = train_test_split(X, y_burnout, test_size=0.2, random_state=42)
         self.burnout_model.fit(X_train, y_burnout_train)
         burnout_pred = self.burnout_model.predict(X_test)
+        burnout_mae = mean_absolute_error(y_burnout_test, burnout_pred)
         burnout_mse = mean_squared_error(y_burnout_test, burnout_pred)
 
         self.hours_model.fit(X_train, y_hours.iloc[y_burnout_train.index])
         hours_pred = self.hours_model.predict(X_test)
+        hours_mae = mean_absolute_error(y_hours.iloc[y_burnout_test.index], hours_pred)
         hours_mse = mean_squared_error(y_hours.iloc[y_burnout_test.index], hours_pred)
 
         self.workload_model.fit(X_train, y_workload.iloc[y_burnout_train.index])
         workload_pred = self.workload_model.predict(X_test)
+        workload_mae = mean_absolute_error(y_workload.iloc[y_burnout_test.index], workload_pred)
         workload_mse = mean_squared_error(y_workload.iloc[y_burnout_test.index], workload_pred)
 
-        return burnout_mse, hours_mse, workload_mse
+        return (burnout_mae, burnout_mse), (hours_mae, hours_mse), (workload_mae, workload_mse)
 
     def predict_burnout(self, weekly_hours: float, weekly_tasks: int):
         recent_data = np.array([[weekly_hours, weekly_tasks]])
@@ -99,11 +102,11 @@ def create_dashboard(bps: BurnoutPreventionSystem):
     name = st.sidebar.text_input("Name")
     role = st.sidebar.text_input("Role")
 
-    # Train models and display MSE
-    burnout_mse, hours_mse, workload_mse = bps.train_models()
-    st.write(f"Burnout Model MSE: {burnout_mse:.2f}")
-    st.write(f"Hours Model MSE: {hours_mse:.2f}")
-    st.write(f"Workload Model MSE: {workload_mse:.2f}")
+    # Train models and display MAE and MSE
+    (burnout_mae, burnout_mse), (hours_mae, hours_mse), (workload_mae, workload_mse) = bps.train_models()
+    st.write(f"Burnout Model - MAE: {burnout_mae:.4f}, MSE: {burnout_mse:.4f}")
+    st.write(f"Hours Model - MAE: {hours_mae:.4f}, MSE: {hours_mse:.4f}")
+    st.write(f"Workload Model - MAE: {workload_mae:.4f}, MSE: {workload_mse:.4f}")
     st.write("-------------------------------------------")
     st.write(f"Developer: {name}")
     st.write(f"Role: {role}")
@@ -151,40 +154,6 @@ def create_dashboard(bps: BurnoutPreventionSystem):
         recommendations = bps.get_recommendations(avg_weekly_hours, avg_weekly_tasks)
         for rec in recommendations:
             st.write(f"- {rec}")
-
-        # New code for generating PDF report
-        if st.button("Print Results"):
-            pdf_buffer = io.BytesIO()
-            can = canvas.Canvas(pdf_buffer, pagesize=letter)
-            width, height = letter
-
-            # Add content to the PDF
-            can.setFont("Helvetica-Bold", 16)
-            can.drawString(50, height - 50, f"Burnout Prevention Report for {name}")
-            can.setFont("Helvetica", 12)
-            can.drawString(50, height - 70, f"Role: {role}")
-            can.drawString(50, height - 90, f"Report generated on: {datetime.date.today().strftime('%Y-%m-%d')}")
-
-            y_position = height - 120
-            for i, week in enumerate(weeks_data):
-                can.drawString(50, y_position, f"Week {i+1}: {week['week_start'].strftime('%Y-%m-%d')}")
-                can.drawString(70, y_position - 20, f"Hours Worked: {week['hours']}")
-                can.drawString(70, y_position - 40, f"Tasks Completed: {week['tasks']}")
-                y_position -= 60
-
-            can.drawString(50, y_position, "Recommendations:")
-            for i, rec in enumerate(recommendations):
-                can.drawString(70, y_position - 20 * (i + 1), f"- {rec}")
-
-            can.save()
-            pdf_buffer.seek(0)
-
-            st.download_button(
-                label="Download PDF Report",
-                data=pdf_buffer,
-                file_name=f"burnout_report_{name.replace(' ', '_')}.pdf",
-                mime="application/pdf"
-            )
 
 # Example usage
 if __name__ == "__main__":
