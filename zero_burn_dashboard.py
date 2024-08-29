@@ -8,10 +8,6 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 import streamlit as st
 import plotly.graph_objects as go
-import plotly.express as px
-import io
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
 
 class Developer:
     def __init__(self, name: str, role: str):
