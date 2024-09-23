@@ -92,7 +92,7 @@ class BurnoutPreventionSystem:
 
         return recommendations
 
-def save_user_data(name: str, role: str, weeks_data: List[Dict]):
+def save_user_data(name: str, role: str, week_start: datetime.date, hours: float, tasks: int):
     filename = "user_data.csv"
     file_exists = False
     try:
@@ -105,15 +105,18 @@ def save_user_data(name: str, role: str, weeks_data: List[Dict]):
         writer = csv.writer(f)
         if not file_exists:
             writer.writerow(["Name", "Role", "Week Start", "Hours Worked", "Number of Tasks"])
-        for week in weeks_data:
-            writer.writerow([name, role, week["week_start"], week["hours"], week["tasks"]])
+        writer.writerow([name, role, week_start, hours, tasks])
 
 def create_dashboard(bps: BurnoutPreventionSystem):
     st.title("Interactive Burnout Tracker")
 
+    # Initialize session state
+    if 'weeks_data' not in st.session_state:
+        st.session_state.weeks_data = []
+
     st.sidebar.header("Developer Information")
-    name = st.sidebar.text_input("Name")
-    role = st.sidebar.text_input("Role")
+    name = st.sidebar.text_input("Name", key="dev_name")
+    role = st.sidebar.text_input("Role", key="dev_role")
 
     # Train models and display MAE and MSE
     (burnout_mae, burnout_mse), (hours_mae, hours_mse), (workload_mae, workload_mse) = bps.train_models()
@@ -128,21 +131,30 @@ def create_dashboard(bps: BurnoutPreventionSystem):
     st.sidebar.header("Weekly Data")
     num_weeks = st.sidebar.number_input("Number of weeks to input", min_value=1, max_value=52, value=4)
 
-    weeks_data = []
     for i in range(num_weeks):
         st.sidebar.subheader(f"Week {i+1}")
-        week_start = st.sidebar.date_input(f"Week {i+1} Start Date", value=datetime.date.today() - datetime.timedelta(weeks=num_weeks-i-1))
-        hours = st.sidebar.number_input(f"Hours Worked (Week {i+1})", min_value=0, max_value=168, value=40)
-        tasks = st.sidebar.number_input(f"Number of Tasks (Week {i+1})", min_value=0, max_value=50, value=5)
-        weeks_data.append({"week_start": week_start, "hours": hours, "tasks": tasks})
+        week_start = st.sidebar.date_input(f"Week {i+1} Start Date", 
+                                           value=datetime.date.today() - datetime.timedelta(weeks=num_weeks-i-1),
+                                           key=f"week_start_{i}")
+        hours = st.sidebar.number_input(f"Hours Worked (Week {i+1})", min_value=0, max_value=168, value=40, key=f"hours_{i}")
+        tasks = st.sidebar.number_input(f"Number of Tasks (Week {i+1})", min_value=0, max_value=50, value=5, key=f"tasks_{i}")
+        
+        # Check if data for this week has changed
+        week_key = f"week_{i}"
+        current_week_data = {"week_start": week_start, "hours": hours, "tasks": tasks}
+        
+        if week_key not in st.session_state or st.session_state[week_key] != current_week_data:
+            st.session_state[week_key] = current_week_data
+            save_user_data(name, role, week_start, hours, tasks)
 
-    if st.sidebar.button("Update Dashboard"):
-        # Save user data to CSV
-        save_user_data(name, role, weeks_data)
-        # Predict burnout rates
-        dates = [week["week_start"] for week in weeks_data]
-        hours = [week["hours"] for week in weeks_data]
-        tasks = [week["tasks"] for week in weeks_data]
+    # Update weeks_data in session state
+    st.session_state.weeks_data = [st.session_state[f"week_{i}"] for i in range(num_weeks)]
+
+    # Predict burnout rates and create visualizations
+    if st.session_state.weeks_data:
+        dates = [week["week_start"] for week in st.session_state.weeks_data]
+        hours = [week["hours"] for week in st.session_state.weeks_data]
+        tasks = [week["tasks"] for week in st.session_state.weeks_data]
         burnout = [bps.predict_burnout(h, t) for h, t in zip(hours, tasks)]
 
         # Create time series plots
