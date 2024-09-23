@@ -92,7 +92,7 @@ class BurnoutPreventionSystem:
         return recommendations
 
 def create_dashboard(bps: BurnoutPreventionSystem):
-    st.title("Interactive Burnout Predictor")
+    st.title("Interactive Burnout Tracker")
 
     st.sidebar.header("Developer Information")
     name = st.sidebar.text_input("Name")
@@ -100,6 +100,7 @@ def create_dashboard(bps: BurnoutPreventionSystem):
 
     # Train models and display MAE and MSE
     (burnout_mae, burnout_mse), (hours_mae, hours_mse), (workload_mae, workload_mse) = bps.train_models()
+    st.write("MAE: Mean Absolute Error, MSE: Mean Squared Error")
     st.write(f"Burnout Model - MAE: {burnout_mae:.4f}, MSE: {burnout_mse:.4f}")
     st.write(f"Hours Model - MAE: {hours_mae:.4f}, MSE: {hours_mse:.4f}")
     st.write(f"Workload Model - MAE: {workload_mae:.4f}, MSE: {workload_mse:.4f}")
