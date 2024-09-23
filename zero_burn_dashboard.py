@@ -1,4 +1,5 @@
 import datetime
+import csv
 from typing import List, Dict
 import numpy as np
 import pandas as pd
@@ -91,6 +92,22 @@ class BurnoutPreventionSystem:
 
         return recommendations
 
+def save_user_data(name: str, role: str, weeks_data: List[Dict]):
+    filename = "user_data.csv"
+    file_exists = False
+    try:
+        with open(filename, 'r') as f:
+            file_exists = True
+    except FileNotFoundError:
+        pass
+
+    with open(filename, 'a', newline='') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(["Name", "Role", "Week Start", "Hours Worked", "Number of Tasks"])
+        for week in weeks_data:
+            writer.writerow([name, role, week["week_start"], week["hours"], week["tasks"]])
+
 def create_dashboard(bps: BurnoutPreventionSystem):
     st.title("Interactive Burnout Tracker")
 
@@ -120,6 +137,8 @@ def create_dashboard(bps: BurnoutPreventionSystem):
         weeks_data.append({"week_start": week_start, "hours": hours, "tasks": tasks})
 
     if st.sidebar.button("Update Dashboard"):
+        # Save user data to CSV
+        save_user_data(name, role, weeks_data)
         # Predict burnout rates
         dates = [week["week_start"] for week in weeks_data]
         hours = [week["hours"] for week in weeks_data]
