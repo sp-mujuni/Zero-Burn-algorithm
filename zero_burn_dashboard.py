@@ -183,7 +183,7 @@ def create_dashboard(bps: BurnoutPreventionSystem):
         for rec in recommendations:
             st.write(f"- {rec}")
 
-# Example usage
+# Running the dashboard
 if __name__ == "__main__":
     bps = BurnoutPreventionSystem('developer_data.csv')
     create_dashboard(bps)
